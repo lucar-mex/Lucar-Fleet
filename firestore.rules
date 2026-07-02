@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserEmpresaID() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.empresaID;
+    }
+
+    function isOwner(empresaID) {
+      return isAuthenticated() && getUserEmpresaID() == empresaID;
+    }
+
+    // EMPRESAS (Companies)
+    match /empresas/{empresaID} {
+      // Only users from the same company can read
+      allow read: if isAuthenticated() && isOwner(empresaID);
+      
+      // Only Propietario can update
+      allow update: if isAuthenticated() && isOwner(empresaID) && 
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Propietario';
+      
+      // Only Propietario can delete
+      allow delete: if isAuthenticated() && isOwner(empresaID) && 
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Propietario';
+      
+      // Anyone can create (for registration)
+      allow create: if isAuthenticated();
+    }
+
+    // USUARIOS (Users)
+    match /usuarios/{usuarioID} {
+      // Users can read their own document
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == usuarioID || 
+         isOwner(resource.data.empresaID));
+      
+      // Users can update their own document
+      allow update: if isAuthenticated() && 
+        (request.auth.uid == usuarioID || 
+         (isOwner(resource.data.empresaID) && 
+          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador']));
+      
+      // Only Propietario or Administrador can delete
+      allow delete: if isAuthenticated() && isOwner(resource.data.empresaID) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador'];
+      
+      // Anyone can create (for registration)
+      allow create: if isAuthenticated();
+    }
+
+    // VEHICULOS (Vehicles)
+    match /vehiculos/{vehiculoID} {
+      // Only users from the same company can read
+      allow read: if isAuthenticated() && isOwner(resource.data.empresaID);
+      
+      // Administrador, Supervisor can update
+      allow update: if isAuthenticated() && isOwner(resource.data.empresaID) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador', 'Supervisor'];
+      
+      // Only Propietario or Administrador can delete
+      allow delete: if isAuthenticated() && isOwner(resource.data.empresaID) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador'];
+      
+      // Administrador, Supervisor can create
+      allow create: if isAuthenticated() && isOwner(request.resource.data.empresaID) &&
+        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador', 'Supervisor'];
+    }
+
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
