@@ -27,7 +27,7 @@ export default function CompaniesPage() {
     correo: '',
     telefono: '',
     direccion: '',
-    planActual: 'Essential' as const,
+    planActual: 'Essential' as 'Essential' | 'Professional' | 'Enterprise',
   });
 
   useEffect(() => {

@@ -34,7 +34,7 @@ export default function UsersPage() {
     telefono: '',
     cargo: '',
     rol: 'Operador' as UserRole,
-    estado: 'Activo' as const,
+    estado: 'Activo' as 'Activo' | 'Inactivo',
   });
 
   useEffect(() => {

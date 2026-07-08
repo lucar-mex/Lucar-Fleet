@@ -38,7 +38,7 @@ export default function VehiclesPage() {
     color: '',
     vin: '',
     kilometrajeInicial: 0,
-    estado: 'Activo' as const,
+    estado: 'Activo' as 'Activo' | 'Inactivo' | 'Mantenimiento',
   });
 
   useEffect(() => {
