@@ -1,78 +1,78 @@
 rules_version = '2';
+
 service cloud.firestore {
+
   match /databases/{database}/documents {
-    // Helper functions
-    function isAuthenticated() {
+
+    function signedIn() {
       return request.auth != null;
     }
 
-    function getUserEmpresaID() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.empresaID;
+    function companyMember(companyId) {
+      return signedIn() &&
+      exists(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid));
     }
 
-    function isOwner(empresaID) {
-      return isAuthenticated() && getUserEmpresaID() == empresaID;
+    // User references (para buscar companyId por UID)
+    match /userRefs/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow update, delete: if false;
     }
 
-    // EMPRESAS (Companies)
-    match /empresas/{empresaID} {
-      // Only users from the same company can read
-      allow read: if isAuthenticated() && isOwner(empresaID);
-      
-      // Only Propietario can update
-      allow update: if isAuthenticated() && isOwner(empresaID) && 
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Propietario';
-      
-      // Only Propietario can delete
-      allow delete: if isAuthenticated() && isOwner(empresaID) && 
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'Propietario';
-      
-      // Anyone can create (for registration)
-      allow create: if isAuthenticated();
+    match /companies/{companyId} {
+
+      allow create: if signedIn();
+
+      allow read, update: if companyMember(companyId);
+
+      match /users/{userId} {
+
+        allow create: if signedIn() &&
+        request.auth.uid == userId;
+
+        allow read, update: if companyMember(companyId);
+
+      }
+
+      match /vehicles/{vehicleId} {
+
+        allow read, write: if companyMember(companyId);
+
+      }
+
+      match /devices/{deviceId} {
+
+        allow read, write: if companyMember(companyId);
+
+      }
+
+      match /events/{eventId} {
+
+        allow read, write: if companyMember(companyId);
+
+      }
+
+      match /routes/{routeId} {
+
+        allow read, write: if companyMember(companyId);
+
+      }
+
+      match /alerts/{alertId} {
+
+        allow read, write: if companyMember(companyId);
+
+      }
+
+      match /settings/{settingId} {
+
+        allow read, write: if companyMember(companyId);
+
+      }
+
     }
 
-    // USUARIOS (Users)
-    match /usuarios/{usuarioID} {
-      // Users can read their own document
-      allow read: if isAuthenticated() && 
-        (request.auth.uid == usuarioID || 
-         isOwner(resource.data.empresaID));
-      
-      // Users can update their own document
-      allow update: if isAuthenticated() && 
-        (request.auth.uid == usuarioID || 
-         (isOwner(resource.data.empresaID) && 
-          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador']));
-      
-      // Only Propietario or Administrador can delete
-      allow delete: if isAuthenticated() && isOwner(resource.data.empresaID) &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador'];
-      
-      // Anyone can create (for registration)
-      allow create: if isAuthenticated();
-    }
-
-    // VEHICULOS (Vehicles)
-    match /vehiculos/{vehiculoID} {
-      // Only users from the same company can read
-      allow read: if isAuthenticated() && isOwner(resource.data.empresaID);
-      
-      // Administrador, Supervisor can update
-      allow update: if isAuthenticated() && isOwner(resource.data.empresaID) &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador', 'Supervisor'];
-      
-      // Only Propietario or Administrador can delete
-      allow delete: if isAuthenticated() && isOwner(resource.data.empresaID) &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador'];
-      
-      // Administrador, Supervisor can create
-      allow create: if isAuthenticated() && isOwner(request.resource.data.empresaID) &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol in ['Propietario', 'Administrador', 'Supervisor'];
-    }
-
-    // Deny all other access
-    match /{document=**} {
-      allow read, write: if false;
-    }
   }
+
 }

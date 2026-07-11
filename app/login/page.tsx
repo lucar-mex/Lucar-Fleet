@@ -1,11 +1,10 @@
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { getUsuarioByUID } from '@/lib/firestore-service';
+import { getUserByUID, getCompany, updateLastAccess } from '@/lib/firestore-service';
 import { useAuthStore } from '@/lib/auth-store';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -13,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, setError } = useAuthStore();
+  const { setUser, setCompany, setError } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,24 +24,43 @@ export default function LoginPage() {
     setLocalError('');
 
     try {
+      console.log('[Login] Authenticating with Firebase...');
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const dbUser = await getUsuarioByUID(userCredential.user.uid);
+      console.log('[Login] Firebase auth successful, UID:', userCredential.user.uid);
 
-      if (!dbUser) {
+      console.log('[Login] Looking up user in Firestore...');
+      const result = await getUserByUID(userCredential.user.uid);
+      if (!result) {
+        console.error('[Login] User not found in Firestore');
         setLocalError('Usuario no encontrado en la base de datos');
         setIsLoading(false);
         return;
       }
 
+      const { user: dbUser, companyId } = result;
+      console.log('[Login] User found, companyId:', companyId);
+
+      // Load company
+      const company = await getCompany(companyId);
+      console.log('[Login] Company loaded:', company?.name);
+
+      // Update last access
+      await updateLastAccess(companyId, userCredential.user.uid);
+
       setUser(dbUser);
+      if (company) setCompany(company);
       router.push('/dashboard');
-    } catch (err: any) {
-      const errorMessage = err.code === 'auth/user-not-found'
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string; message?: string };
+      console.error('[Login] Error:', firebaseErr.code, firebaseErr.message);
+      const errorMessage = firebaseErr.code === 'auth/user-not-found'
         ? 'Usuario no encontrado'
-        : err.code === 'auth/wrong-password'
+        : firebaseErr.code === 'auth/wrong-password'
         ? 'Contraseña incorrecta'
-        : err.code === 'auth/invalid-email'
+        : firebaseErr.code === 'auth/invalid-email'
         ? 'Email inválido'
+        : firebaseErr.code === 'auth/invalid-credential'
+        ? 'Credenciales inválidas'
         : 'Error al iniciar sesión';
       setLocalError(errorMessage);
       setError(errorMessage);
@@ -52,23 +70,25 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-[#0a0a0f] bg-mesh flex items-center justify-center p-6">
+      <Card className="w-full max-w-md" hover={false}>
         <CardHeader>
-          <div className="text-center mb-4">
-            <h1 className="text-3xl font-bold text-blue-500">LuCar</h1>
-            <p className="text-gray-400 text-sm">Fleet Management System</p>
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+              <span className="text-white font-bold text-lg">L</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight gradient-text">LuCar Fleet</h1>
+            <p className="text-gray-500 text-sm mt-1">Plataforma de gestión de flotas</p>
           </div>
-          <CardTitle className="text-center">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-center text-base text-gray-300">Iniciar Sesión</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-5">
             {error && (
-              <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200 text-sm">
+              <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-medium">
                 {error}
               </div>
             )}
-
             <Input
               label="Correo Electrónico"
               type="email"
@@ -77,7 +97,6 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-
             <Input
               label="Contraseña"
               type="password"
@@ -86,7 +105,6 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-
             <Button
               type="submit"
               variant="primary"
@@ -97,11 +115,10 @@ export default function LoginPage() {
               Iniciar Sesión
             </Button>
           </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-gray-400 text-sm">
+          <div className="mt-8 text-center">
+            <p className="text-gray-500 text-sm">
               ¿No tienes cuenta?{' '}
-              <Link href="/register" className="text-blue-500 hover:text-blue-400">
+              <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium">
                 Regístrate aquí
               </Link>
             </p>

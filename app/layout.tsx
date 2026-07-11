@@ -1,9 +1,17 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
-  title: 'LuCar Fleet - Sprint 2',
-  description: 'Sistema de gestión de flota vehicular multi-empresa',
+  title: 'LuCar Fleet',
+  description: 'Plataforma profesional de gestión de flota vehicular con rastreo GPS',
+  keywords: ['fleet management', 'GPS tracking', 'vehicle management', 'LuCar'],
 };
 
 export default function RootLayout({
@@ -12,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className="bg-gray-900 text-white antialiased">
+    <html lang="es" className={inter.variable}>
+      <body className="antialiased">
         {children}
       </body>
     </html>

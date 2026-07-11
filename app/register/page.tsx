@@ -1,130 +1,145 @@
 'use client';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { createEmpresa, createUsuario, getEmpresa } from '@/lib/firestore-service';
+import { createCompany, createUser, createUserRef, getCompany } from '@/lib/firestore-service';
 import { useAuthStore } from '@/lib/auth-store';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 
-type Step = 'empresa' | 'usuario';
+type Step = 'company' | 'user';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { setUser, setEmpresa } = useAuthStore();
-  const [step, setStep] = useState<Step>('empresa');
+  const { setUser, setCompany } = useAuthStore();
+  const [step, setStep] = useState<Step>('company');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [empresaID, setEmpresaID] = useState('');
+  const [companyId, setCompanyId] = useState('');
 
-  // Empresa form
-  const [empresaNombre, setEmpresaNombre] = useState('');
-  const [empresaRazonSocial, setEmpresaRazonSocial] = useState('');
-  const [empresaRFC, setEmpresaRFC] = useState('');
-  const [empresaCorreo, setEmpresaCorreo] = useState('');
-  const [empresaTelefono, setEmpresaTelefono] = useState('');
-  const [empresaDireccion, setEmpresaDireccion] = useState('');
-  const [empresaPlan, setEmpresaPlan] = useState<'Essential' | 'Professional' | 'Enterprise'>('Essential');
+  // Company form
+  const [companyName, setCompanyName] = useState('');
+  const [companyLegalName, setCompanyLegalName] = useState('');
+  const [companyTaxId, setCompanyTaxId] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [companyPlan, setCompanyPlan] = useState<'Essential' | 'Professional' | 'Enterprise'>('Essential');
 
-  // Usuario form
-  const [nombre, setNombre] = useState('');
+  // User form
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [telefono, setTelefono] = useState('');
-  const [cargo, setCargo] = useState('');
+  const [phone, setPhone] = useState('');
+  const [position, setPosition] = useState('');
 
-  const handleCreateEmpresa = async (e: React.FormEvent) => {
+  const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      if (!empresaNombre || !empresaCorreo || !empresaTelefono || !empresaDireccion) {
+      if (!companyName || !companyEmail || !companyPhone || !companyAddress) {
         throw new Error('Por favor completa todos los campos requeridos');
       }
 
-      const newEmpresaID = await createEmpresa({
-        nombre: empresaNombre,
-        razonSocial: empresaRazonSocial,
-        rfc: empresaRFC,
-        correo: empresaCorreo,
-        telefono: empresaTelefono,
-        direccion: empresaDireccion,
-        planActual: empresaPlan,
-      });
-
-      setEmpresaID(newEmpresaID);
-      setStep('usuario');
-    } catch (err: any) {
-      setError(err.message || 'Error al crear la empresa');
+      // We need to create the Firebase user first so we can create the company
+      // (Firestore rules require signedIn() for company creation)
+      // But we'll create the company in the next step after auth
+      // For now, just validate and move to next step
+      setStep('user');
+    } catch (err: unknown) {
+      const error = err as { message?: string };
+      setError(error.message || 'Error al validar datos de empresa');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCreateUsuario = async (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      if (!nombre || !email || !password || !cargo) {
+      if (!name || !email || !password || !position) {
         throw new Error('Por favor completa todos los campos requeridos');
       }
-
       if (password !== confirmPassword) {
         throw new Error('Las contraseñas no coinciden');
       }
-
       if (password.length < 6) {
         throw new Error('La contraseña debe tener al menos 6 caracteres');
       }
 
-      // Create Firebase user
+      console.log('[Register] Creating Firebase auth user...');
+      // 1. Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
+      console.log('[Register] Firebase user created, UID:', uid);
 
-      // Create database user
-      const usuarioID = await createUsuario({
-        nombre,
-        correo: email,
-        telefono,
-        cargo,
-        rol: 'Propietario', // First user is always Propietario
-        empresaID,
-        uid: userCredential.user.uid,
+      console.log('[Register] Creating company in Firestore...');
+      // 2. Create company document
+      const newCompanyId = await createCompany({
+        name: companyName,
+        legalName: companyLegalName || undefined,
+        taxId: companyTaxId || undefined,
+        email: companyEmail,
+        phone: companyPhone,
+        address: companyAddress,
+        plan: companyPlan,
       });
+      console.log('[Register] Company created, ID:', newCompanyId);
+      setCompanyId(newCompanyId);
 
-      // Get empresa and user data
-      const empresa = await getEmpresa(empresaID);
-      const usuario = {
-        id: usuarioID,
-        nombre,
-        correo: email,
-        telefono,
-        cargo,
-        rol: 'Propietario' as const,
-        empresaID,
-        uid: userCredential.user.uid,
-        estado: 'Activo' as const,
-        ultimoAcceso: null,
+      console.log('[Register] Creating user in company subcollection...');
+      // 3. Create user document in company subcollection (using UID as doc ID)
+      await createUser(newCompanyId, uid, {
+        name,
+        email,
+        phone,
+        position,
+        role: 'owner', // First user is always owner
+      });
+      console.log('[Register] User created in subcollection');
+
+      console.log('[Register] Creating user reference...');
+      // 4. Create user reference for UID lookup
+      await createUserRef(uid, newCompanyId);
+      console.log('[Register] User reference created');
+
+      // 5. Load company and set state
+      const company = await getCompany(newCompanyId);
+      const userObj = {
+        id: uid,
+        name,
+        email,
+        phone,
+        position,
+        role: 'owner' as const,
+        companyId: newCompanyId,
+        status: 'active' as const,
+        lastAccess: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      setUser(usuario);
-      setEmpresa(empresa);
+      setUser(userObj);
+      if (company) setCompany(company);
+      console.log('[Register] Registration complete, redirecting to dashboard');
       router.push('/dashboard');
-    } catch (err: any) {
-      const errorMessage = err.code === 'auth/email-already-in-use'
+    } catch (err: unknown) {
+      const firebaseErr = err as { code?: string; message?: string };
+      console.error('[Register] Error:', firebaseErr.code, firebaseErr.message);
+      const errorMessage = firebaseErr.code === 'auth/email-already-in-use'
         ? 'El correo ya está registrado'
-        : err.code === 'auth/weak-password'
+        : firebaseErr.code === 'auth/weak-password'
         ? 'La contraseña es muy débil'
-        : err.message || 'Error al registrar usuario';
+        : firebaseErr.message || 'Error al registrar usuario';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -132,114 +147,116 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen bg-[#0a0a0f] bg-mesh flex items-center justify-center p-6">
+      <Card className="w-full max-w-lg" hover={false}>
         <CardHeader>
-          <div className="text-center mb-4">
-            <h1 className="text-3xl font-bold text-blue-500">LuCar</h1>
-            <p className="text-gray-400 text-sm">Fleet Management System</p>
+          <div className="text-center mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mx-auto mb-4">
+              <span className="text-white font-bold text-lg">L</span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight gradient-text">LuCar Fleet</h1>
+            <p className="text-gray-500 text-sm mt-1">Crea tu cuenta empresarial</p>
           </div>
-          <CardTitle className="text-center">
-            {step === 'empresa' ? 'Crear Empresa' : 'Crear Usuario'}
+          <CardTitle className="text-center text-base text-gray-300">
+            {step === 'company' ? 'Paso 1: Datos de Empresa' : 'Paso 2: Tu Cuenta'}
           </CardTitle>
+          {/* Progress indicator */}
+          <div className="flex gap-2 mt-4 px-6">
+            <div className={`h-1 flex-1 rounded-full ${step === 'company' ? 'bg-blue-500' : 'bg-blue-500'}`} />
+            <div className={`h-1 flex-1 rounded-full ${step === 'user' ? 'bg-blue-500' : 'bg-white/[0.06]'}`} />
+          </div>
         </CardHeader>
         <CardContent>
-          {step === 'empresa' ? (
-            <form onSubmit={handleCreateEmpresa} className="space-y-4">
+          {step === 'company' ? (
+            <form onSubmit={handleCreateCompany} className="space-y-4">
               {error && (
-                <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200 text-sm">
+                <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-medium">
                   {error}
                 </div>
               )}
-
               <Input
                 label="Nombre de la Empresa"
-                placeholder="Mi Empresa S.A."
-                value={empresaNombre}
-                onChange={(e) => setEmpresaNombre(e.target.value)}
+                placeholder="Mi Empresa de Transporte"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
                 required
               />
-
-              <Input
-                label="Razón Social (Opcional)"
-                placeholder="Razón social completa"
-                value={empresaRazonSocial}
-                onChange={(e) => setEmpresaRazonSocial(e.target.value)}
-              />
-
-              <Input
-                label="RFC (Opcional)"
-                placeholder="ABC123456XYZ"
-                value={empresaRFC}
-                onChange={(e) => setEmpresaRFC(e.target.value)}
-              />
-
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Razón Social"
+                  placeholder="Opcional"
+                  value={companyLegalName}
+                  onChange={(e) => setCompanyLegalName(e.target.value)}
+                />
+                <Input
+                  label="RFC"
+                  placeholder="Opcional"
+                  value={companyTaxId}
+                  onChange={(e) => setCompanyTaxId(e.target.value)}
+                />
+              </div>
               <Input
                 label="Correo Electrónico"
                 type="email"
                 placeholder="empresa@email.com"
-                value={empresaCorreo}
-                onChange={(e) => setEmpresaCorreo(e.target.value)}
+                value={companyEmail}
+                onChange={(e) => setCompanyEmail(e.target.value)}
                 required
               />
-
-              <Input
-                label="Teléfono"
-                placeholder="+55 1234567890"
-                value={empresaTelefono}
-                onChange={(e) => setEmpresaTelefono(e.target.value)}
-                required
-              />
-
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Teléfono"
+                  placeholder="+52 55 1234 5678"
+                  value={companyPhone}
+                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  required
+                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2 tracking-tight">
+                    Plan
+                  </label>
+                  <select
+                    value={companyPlan}
+                    onChange={(e) => setCompanyPlan(e.target.value as 'Essential' | 'Professional' | 'Enterprise')}
+                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-xl text-white focus:outline-none focus:bg-white/[0.05] focus:border-blue-500/50 focus:shadow-[0_0_0_3px_rgba(59,130,246,0.1)] transition-all text-[0.9375rem]"
+                  >
+                    <option value="Essential">Essential (10 vehículos)</option>
+                    <option value="Professional">Professional (50 vehículos)</option>
+                    <option value="Enterprise">Enterprise (500 vehículos)</option>
+                  </select>
+                </div>
+              </div>
               <Input
                 label="Dirección"
-                placeholder="Calle Principal 123"
-                value={empresaDireccion}
-                onChange={(e) => setEmpresaDireccion(e.target.value)}
+                placeholder="Calle Principal 123, Ciudad"
+                value={companyAddress}
+                onChange={(e) => setCompanyAddress(e.target.value)}
                 required
               />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Plan
-                </label>
-                <select
-                  value={empresaPlan}
-                  onChange={(e) => setEmpresaPlan(e.target.value as any)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Essential">Essential (10 vehículos)</option>
-                  <option value="Professional">Professional (50 vehículos)</option>
-                  <option value="Enterprise">Enterprise (500 vehículos)</option>
-                </select>
-              </div>
-
               <Button
                 type="submit"
                 variant="primary"
                 size="md"
                 isLoading={isLoading}
-                className="w-full"
+                className="w-full mt-2"
               >
                 Siguiente
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleCreateUsuario} className="space-y-4">
+            <form onSubmit={handleCreateUser} className="space-y-4">
               {error && (
-                <div className="p-3 bg-red-900 border border-red-700 rounded-lg text-red-200 text-sm">
+                <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-medium">
                   {error}
                 </div>
               )}
-
               <Input
                 label="Nombre Completo"
                 placeholder="Juan Pérez"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 required
               />
-
               <Input
                 label="Correo Electrónico"
                 type="email"
@@ -248,22 +265,21 @@ export default function RegisterPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-
-              <Input
-                label="Teléfono"
-                placeholder="+55 1234567890"
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-              />
-
-              <Input
-                label="Cargo"
-                placeholder="Gerente de Flota"
-                value={cargo}
-                onChange={(e) => setCargo(e.target.value)}
-                required
-              />
-
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Teléfono"
+                  placeholder="+52 55 1234 5678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+                <Input
+                  label="Cargo"
+                  placeholder="Director General"
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  required
+                />
+              </div>
               <Input
                 label="Contraseña"
                 type="password"
@@ -272,7 +288,6 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-
               <Input
                 label="Confirmar Contraseña"
                 type="password"
@@ -281,13 +296,12 @@ export default function RegisterPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
-
-              <div className="flex gap-3">
+              <div className="flex gap-3 mt-2">
                 <Button
                   type="button"
                   variant="secondary"
                   size="md"
-                  onClick={() => setStep('empresa')}
+                  onClick={() => setStep('company')}
                   className="flex-1"
                 >
                   Atrás
@@ -304,11 +318,10 @@ export default function RegisterPage() {
               </div>
             </form>
           )}
-
-          <div className="mt-6 text-center">
-            <p className="text-gray-400 text-sm">
+          <div className="mt-8 text-center">
+            <p className="text-gray-500 text-sm">
               ¿Ya tienes cuenta?{' '}
-              <Link href="/login" className="text-blue-500 hover:text-blue-400">
+              <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
                 Inicia sesión aquí
               </Link>
             </p>

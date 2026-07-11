@@ -1,34 +1,38 @@
 import { UserRole } from './types';
 
-// Define permissions for each role
 const rolePermissions: Record<UserRole, string[]> = {
-  Propietario: [
+  owner: [
     'view_dashboard',
     'manage_company',
     'manage_users',
     'manage_vehicles',
+    'manage_devices',
     'view_reports',
     'manage_settings',
-    'invite_users',
-    'delete_users',
+    'manage_alerts',
+    'manage_routes',
   ],
-  Administrador: [
+  admin: [
     'view_dashboard',
     'manage_users',
     'manage_vehicles',
+    'manage_devices',
     'view_reports',
     'manage_settings',
-    'invite_users',
+    'manage_alerts',
   ],
-  Supervisor: [
+  supervisor: [
     'view_dashboard',
     'view_users',
     'manage_vehicles',
+    'manage_devices',
     'view_reports',
+    'view_alerts',
   ],
-  Operador: [
+  operator: [
     'view_dashboard',
     'view_vehicles',
+    'view_alerts',
   ],
 };
 
@@ -39,28 +43,27 @@ export const hasPermission = (role: UserRole | null | undefined, permission: str
 
 export const canAccessPage = (role: UserRole | null | undefined, page: string): boolean => {
   if (!role) return false;
-
   const pagePermissions: Record<string, string[]> = {
     '/dashboard': ['view_dashboard'],
     '/companies': ['manage_company'],
     '/users': ['manage_users', 'view_users'],
     '/vehicles': ['manage_vehicles', 'view_vehicles'],
+    '/devices': ['manage_devices'],
     '/settings': ['manage_settings'],
-    '/profile': [], // Everyone can access their profile
+    '/alerts': ['manage_alerts', 'view_alerts'],
+    '/profile': [],
   };
-
   const requiredPermissions = pagePermissions[page] || [];
   if (requiredPermissions.length === 0) return true;
-
   return requiredPermissions.some((perm) => hasPermission(role, perm));
 };
 
 export const getRoleLabel = (role: UserRole): string => {
   const labels: Record<UserRole, string> = {
-    Propietario: 'Propietario',
-    Administrador: 'Administrador',
-    Supervisor: 'Supervisor',
-    Operador: 'Operador',
+    owner: 'Propietario',
+    admin: 'Administrador',
+    supervisor: 'Supervisor',
+    operator: 'Operador',
   };
-  return labels[role];
+  return labels[role] || role;
 };

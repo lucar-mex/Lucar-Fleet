@@ -8,17 +8,17 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
   ({ variant = 'default', className = '', children, ...props }, ref) => {
     const variantStyles = {
-      default: 'bg-gray-700 text-gray-200',
-      success: 'bg-green-900 text-green-200',
-      warning: 'bg-yellow-900 text-yellow-200',
-      danger: 'bg-red-900 text-red-200',
-      info: 'bg-blue-900 text-blue-200',
+      default: 'bg-white/[0.06] text-gray-300 border-white/[0.08]',
+      success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+      warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+      danger: 'bg-red-500/10 text-red-400 border-red-500/20',
+      info: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     };
 
     return (
       <span
         ref={ref}
-        className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${variantStyles[variant]} ${className}`}
+        className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border ${variantStyles[variant]} ${className}`}
         {...props}
       >
         {children}
@@ -28,5 +28,4 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
 );
 
 Badge.displayName = 'Badge';
-
 export default Badge;

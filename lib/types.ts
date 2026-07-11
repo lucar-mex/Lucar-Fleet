@@ -1,74 +1,184 @@
-// Empresa (Company)
-export interface Empresa {
+// ============ CORE ENTITIES ============
+
+export type UserRole = 'owner' | 'admin' | 'supervisor' | 'operator';
+
+export interface Company {
   id: string;
-  nombre: string;
-  razonSocial?: string;
-  rfc?: string;
-  correo: string;
-  telefono: string;
-  direccion: string;
-  planActual: 'Essential' | 'Professional' | 'Enterprise';
-  fechaAlta: Date;
-  estado: 'Activo' | 'Suspendido' | 'Cancelado';
-  fechaRenovacion: Date;
-  maxVehiculos: number;
+  name: string;
+  legalName?: string;
+  taxId?: string;
+  email: string;
+  phone: string;
+  address: string;
+  plan: 'Essential' | 'Professional' | 'Enterprise';
+  status: 'active' | 'suspended' | 'cancelled';
+  renewalDate: Date;
+  maxVehicles: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Usuario (User)
-export type UserRole = 'Propietario' | 'Administrador' | 'Supervisor' | 'Operador';
-
-export interface Usuario {
-  id: string;
-  nombre: string;
-  correo: string;
-  telefono: string;
-  cargo: string;
-  estado: 'Activo' | 'Inactivo';
-  ultimoAcceso: Date | null;
-  rol: UserRole;
-  empresaID: string;
-  uid: string; // Firebase UID
+export interface User {
+  id: string; // Same as Firebase Auth UID
+  name: string;
+  email: string;
+  phone: string;
+  position: string;
+  status: 'active' | 'inactive';
+  lastAccess: Date | null;
+  role: UserRole;
+  companyId: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Vehículo (Vehicle)
-export interface Vehiculo {
+export interface Vehicle {
   id: string;
-  nombreInterno: string;
-  numeroEconomico: string;
-  tipoVehiculo: string;
-  marca: string;
-  modelo: string;
-  año: number;
-  placas: string;
+  internalName: string;
+  economicNumber: string;
+  type: string;
+  brand: string;
+  model: string;
+  year: number;
+  plates: string;
   color: string;
   vin?: string;
-  kilometrajeInicial: number;
-  estado: 'Activo' | 'Inactivo' | 'Mantenimiento';
-  empresaID: string;
-  gpsID?: string; // For future GPS integration
+  initialMileage: number;
+  status: 'active' | 'inactive' | 'maintenance';
+  deviceId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Auth Context
+// ============ GPS ENTITIES ============
+
+export interface GPSDevice {
+  id: string;
+  imei: string;
+  simNumber: string;
+  model: string;
+  manufacturer: string;
+  protocol: 'tk103' | 'coban' | 'custom';
+  status: 'online' | 'offline' | 'inactive';
+  vehicleId?: string;
+  lastConnection: Date | null;
+  firmwareVersion?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GPSPosition {
+  deviceId: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  speed: number;
+  heading: number;
+  accuracy: number;
+  timestamp: Date;
+  satellites?: number;
+}
+
+export interface GPSTelemetry {
+  deviceId: string;
+  acc: boolean;
+  battery: number;
+  voltage: number;
+  signalStrength: number;
+  temperature?: number;
+  fuelLevel?: number;
+  mileage?: number;
+  timestamp: Date;
+}
+
+export interface GPSEvent {
+  id: string;
+  deviceId: string;
+  vehicleId?: string;
+  type: 'sos' | 'geofence_enter' | 'geofence_exit' | 'overspeed' | 'low_battery' | 'acc_on' | 'acc_off' | 'vibration' | 'power_cut' | 'custom';
+  severity: 'critical' | 'warning' | 'info';
+  position: GPSPosition;
+  telemetry?: GPSTelemetry;
+  description: string;
+  acknowledged: boolean;
+  acknowledgedBy?: string;
+  acknowledgedAt?: Date;
+  createdAt: Date;
+}
+
+export interface GPSCommand {
+  id: string;
+  deviceId: string;
+  command: string;
+  parameters?: Record<string, unknown>;
+  status: 'pending' | 'sent' | 'acknowledged' | 'failed' | 'timeout';
+  response?: string;
+  sentAt?: Date;
+  respondedAt?: Date;
+  createdAt: Date;
+}
+
+export interface GPSRoute {
+  id: string;
+  vehicleId: string;
+  deviceId: string;
+  name?: string;
+  positions: GPSPosition[];
+  startTime: Date;
+  endTime: Date;
+  distance: number;
+  maxSpeed: number;
+  avgSpeed: number;
+  stops: number;
+  createdAt: Date;
+}
+
+// ============ ALERT ENTITY ============
+
+export interface Alert {
+  id: string;
+  type: 'geofence' | 'speed' | 'maintenance' | 'battery' | 'sos' | 'custom';
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  message: string;
+  vehicleId?: string;
+  deviceId?: string;
+  acknowledged: boolean;
+  acknowledgedBy?: string;
+  acknowledgedAt?: Date;
+  createdAt: Date;
+}
+
+// ============ SETTINGS ============
+
+export interface CompanySettings {
+  id: string;
+  speedLimit: number;
+  maintenanceInterval: number;
+  alertsEnabled: boolean;
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  timezone: string;
+  language: string;
+  updatedAt: Date;
+}
+
+// ============ PLAN LIMITS ============
+
+export const PLAN_LIMITS: Record<string, { vehicles: number; users: number; devices: number }> = {
+  Essential: { vehicles: 10, users: 5, devices: 10 },
+  Professional: { vehicles: 50, users: 20, devices: 50 },
+  Enterprise: { vehicles: 500, users: 100, devices: 500 },
+};
+
+// ============ AUTH CONTEXT ============
+
 export interface AuthContextType {
-  user: Usuario | null;
-  empresa: Empresa | null;
+  user: User | null;
+  company: Company | null;
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, userData: Partial<Usuario>, empresaData: Partial<Empresa>) => Promise<void>;
+  register: (email: string, password: string, userData: Partial<User>, companyData: Partial<Company>) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (userData: Partial<Usuario>) => Promise<void>;
 }
-
-// Plan limits
-export const PLAN_LIMITS: Record<string, number> = {
-  Essential: 10,
-  Professional: 50,
-  Enterprise: 500,
-};
